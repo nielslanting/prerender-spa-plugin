@@ -23,11 +23,18 @@ SimpleHtmlPrecompiler.prototype.apply = function (compiler) {
               })
             }
             var folder = Path.join(self.options.outputDir || self.staticDir, outputPath)
+            if (self.options.outputToFile) {
+              var base = Path.basename(folder)
+              folder = Path.resolve(folder, '..')
+            }
             mkdirp(folder, function (error) {
               if (error) {
                 return reject('Folder could not be created: ' + folder + '\n' + error)
               }
               var file = Path.join(folder, 'index.html')
+              if (self.options.outputToFile) {
+                file = Path.join(folder, base + '.html')
+              }
               FS.writeFile(
                 file,
                 prerenderedHTML,
