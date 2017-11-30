@@ -1,6 +1,8 @@
 var FS = require('fs')
 var Path = require('path')
 var mkdirp = require('mkdirp')
+const jsdom = require("jsdom");
+const { JSDOM } = jsdom;
 var compileToHTML = require('./lib/compile-to-html')
 
 function SimpleHtmlPrecompiler (staticDir, paths, options) {
@@ -12,6 +14,14 @@ function SimpleHtmlPrecompiler (staticDir, paths, options) {
 SimpleHtmlPrecompiler.prototype.apply = function (compiler) {
   var self = this
   compiler.plugin('after-emit', function (compilation, done) {
+    var indexHTML = FS.readFileSync(Path.resolve(self.staticDir, 'index.html'));
+
+    // Backup index
+    if (self.options.backup) {
+      FS.createReadStream(Path.resolve(self.staticDir, 'index.html'))
+      .pipe(FS.createWriteStream(Path.resolve(self.staticDir, 'index.bak.html')));
+    }
+
     Promise.all(
       self.paths.map(function (outputPath) {
         return new Promise(function (resolve, reject) {
@@ -22,9 +32,11 @@ SimpleHtmlPrecompiler.prototype.apply = function (compiler) {
                 route: outputPath
               })
             }
-            var base = Path.basename(outputPath) || 'index'
-            if (self.options.outputToFile) {
-              outputPath = Path.dirname(outputPath)
+            if  (self.options.captureElement) {
+              const dom = new JSDOM(indexHTML);
+              const element = dom.window.document.querySelector(self.options.captureAfterElementExists);
+              element.innerHTML = prerenderedHTML;
+              prerenderedHTML = dom.window.document.querySelector('html').outerHTML;
             }
             var folder = Path.join(self.options.outputDir || self.staticDir, outputPath)
             mkdirp(folder, function (error) {
@@ -32,9 +44,6 @@ SimpleHtmlPrecompiler.prototype.apply = function (compiler) {
                 return reject('Folder could not be created: ' + folder + '\n' + error)
               }
               var file = Path.join(folder, 'index.html')
-              if (self.options.outputToFile) {
-                file = Path.join(folder, base + '.html')
-              }
               FS.writeFile(
                 file,
                 prerenderedHTML,
